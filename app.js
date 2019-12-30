@@ -13,7 +13,7 @@ app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.static('public'));
 
-mongoose.connect("mongodb://localhost:27017/todolistDB", {useNewUrlParser: true});
+mongoose.connect("mongodb://localhost:27017/todolistDB", {useNewUrlParser: true,useFindAndModify: false});
 
 const itemsSchema = new mongoose.Schema({
   name: {
@@ -96,17 +96,17 @@ function createNewList(listName,callback){
   });
 }
 
-function addDefaultItemsToList(listName, callback){
-  const defaultItems = getDefaultItems();
-  ToDoList.updateOne({name: listName}, {items: defaultItems}, (err, updateResult) => {
-    if(err){
-      console.log(err);
-    }else{
-      console.log("Document Updated successfully...");
-      callback();
-    }
-  });
-}
+// function addDefaultItemsToList(listName, callback){
+//   const defaultItems = getDefaultItems();
+//   ToDoList.updateOne({name: listName}, {items: defaultItems}, (err, updateResult) => {
+//     if(err){
+//       console.log(err);
+//     }else{
+//       console.log("Document Updated successfully...");
+//       callback();
+//     }
+//   });
+// }
 
 app.get("/", (req, res) => {
   const day = date.getDay();
@@ -129,13 +129,15 @@ app.get("/about", (req, res) => {
 app.get("/:listName", (req, res) => {
   const listName = lodash.capitalize(req.params.listName);
   getList(listName, (targetList) => {
-    if(targetList !== null && targetList.items){
+    if(targetList != null){
       res.render('index', {listTitle: listName, items: targetList.items});
-    }else if(targetList !== null){
-      addDefaultItemsToList(listName, () => {
-        res.redirect("/"+listName);
-      });
-    }else{
+    }
+    // else if(targetList != null){
+    //   addDefaultItemsToList(listName, () => {
+    //     res.redirect("/"+listName);
+    //   });
+    // }
+    else{
       createNewList(listName, () => {
         res.redirect("/"+listName);
       });
@@ -173,15 +175,27 @@ app.post("/", (req, res) => {
 });
 
 app.post("/delete", (req, res) => {
-  const item = req.body.itemToDelete;
-  Item.deleteOne({_id: item}, (err) => {
-    if(err){
-      console.log(err);
-    }else{
-      console.log("Deleted an item from db...");
-      res.redirect("/");
-    }
-  });
+  const itemId = req.body.itemToDelete;
+  const listName = req.body.listName;
+  if(listName === "Today"){
+    Item.deleteOne({_id: item}, (err) => {
+      if(err){
+        console.log(err);
+      }else{
+        console.log("Deleted an item from db...");
+        res.redirect("/");
+      }
+    });
+  }else{
+    ToDoList.findOneAndUpdate({name: listName},{$pull: { items: {_id: itemId}}},(err, foundList) => {
+      if(err){
+        console.log(err);
+      }else{
+        console.log("Removed item from custom list...");
+        res.redirect("/"+listName);
+      }
+    });
+  }
 });
 
 app.listen(port, () => {console.log("Server is listening on "+port)});
